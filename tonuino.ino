@@ -937,6 +937,15 @@ void playShortCut(uint8_t shortCut) {
     Serial.println("Shortcut not configured!");
 }
 
+float readVolume() {
+    int sensorValue = analogRead(digitalVolumePin);
+    float voltage = sensorValue * (5.0) / (1023.0);
+    float volume = sensorValue * (mySettings.maxVolume - mySettings.minVolume) / (1023.0) + mySettings.minVolume;
+    Serial.print("Volume: ");
+    Serial.println(volume);
+    return volume;
+}
+
 void loop() {
   do {
     checkStandbyAtMillis();
@@ -951,14 +960,8 @@ void loop() {
     // doppelt belegt werden
     readButtons();
 
-    // analog volume adjustor 
-    int sensorValue = analogRead(digitalVolumePin);
-    float voltage = sensorValue * (5.0) / (1023.0);
-    float analogVolume = sensorValue * (mySettings.maxVolume - mySettings.minVolume) / (1023.0) + mySettings.minVolume;
-    Serial.print("Volume: ");
-    Serial.println(analogVolume);
-    mp3.setVolume(analogVolume);
-    delay(1);
+    // Read volume from potentiometer
+    mp3.setVolume(readVolume());
 
     if (dialButton1.isPressed()) {
       Serial.println("test button1 selected");
@@ -972,7 +975,6 @@ void loop() {
     if (dialButton4.isPressed()) {
       Serial.println("test button4 selected");
     }
-
 
     // admin menu
     if ((pauseButton.pressedFor(LONG_PRESS) || upButton.pressedFor(LONG_PRESS) || downButton.pressedFor(LONG_PRESS)) && pauseButton.isPressed() && upButton.isPressed() && downButton.isPressed()) {
