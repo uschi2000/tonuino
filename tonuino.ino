@@ -15,9 +15,6 @@
     Information and contribution at https://tonuino.de.
 */
 
-// uncomment the below line to enable five button support
-#define FIVEBUTTONS
-
 static const uint32_t cardCookie = 322417479;
 
 // DFPlayer Mini
@@ -55,7 +52,6 @@ struct adminSettings {
   uint8_t eq;
   bool locked;
   long standbyTimer;
-  bool invertVolumeButtons;
   folderSettings shortCuts[4];
   uint8_t adminMenuLocked;
   uint8_t adminMenuPin[4];
@@ -155,7 +151,6 @@ void resetSettings() {
   mySettings.eq = 1;
   mySettings.locked = false;
   mySettings.standbyTimer = 0;
-  mySettings.invertVolumeButtons = false;
   mySettings.shortCuts[0].folder = 0;
   mySettings.shortCuts[1].folder = 0;
   mySettings.shortCuts[2].folder = 0;
@@ -211,9 +206,6 @@ void loadSettingsFromFlash() {
 
   Serial.print("Sleep Timer: ");
   Serial.println(mySettings.standbyTimer);
-
-  Serial.print("Inverted Volume Buttons: ");
-  Serial.println(mySettings.invertVolumeButtons);
 
   Serial.print("Admin Menu locked: ");
   Serial.println(mySettings.adminMenuLocked);
@@ -645,30 +637,15 @@ MFRC522::StatusCode status;
 #define openAnalogPin A7
 
 #define digitalVolumePin A12
-#define minVolumeAnalog 1
-#define maxVolumeAnalog 20
-
-#ifdef FIVEBUTTONS
-#define buttonFourPin A4
-#define buttonFivePin A3
-#endif
 
 #define LONG_PRESS 1000
 
 Button pauseButton(buttonPause);
 Button upButton(buttonUp);
 Button downButton(buttonDown);
-#ifdef FIVEBUTTONS
-Button buttonFour(buttonFourPin);
-Button buttonFive(buttonFivePin);
-#endif
 bool ignorePauseButton = false;
 bool ignoreUpButton = false;
 bool ignoreDownButton = false;
-#ifdef FIVEBUTTONS
-bool ignoreButtonFour = false;
-bool ignoreButtonFive = false;
-#endif
 
 /// Funktionen für den Standby Timer (z.B. über Pololu-Switch oder Mosfet)
 
@@ -730,10 +707,6 @@ void setup() {
   pauseButton.begin();
   upButton.begin();
   downButton.begin();
-  #ifdef FIVEBUTTONS
-  buttonFour.begin();
-  buttonFive.begin();
-  #endif
 
   // Wert für randomSeed() erzeugen durch das mehrfache Sammeln von rauschenden LSBs eines offenen Analogeingangs
   uint32_t ADC_LSB;
@@ -783,10 +756,6 @@ void setup() {
   pinMode(buttonPause, INPUT_PULLUP);
   pinMode(buttonUp, INPUT_PULLUP);
   pinMode(buttonDown, INPUT_PULLUP);
-#ifdef FIVEBUTTONS
-  pinMode(buttonFourPin, INPUT_PULLUP);
-  pinMode(buttonFivePin, INPUT_PULLUP);
-#endif
 
   // RESET --- ALLE DREI KNÖPFE BEIM STARTEN GEDRÜCKT HALTEN -> alle EINSTELLUNGEN werden gelöscht
   if (digitalRead(buttonPause) == LOW && digitalRead(buttonUp) == LOW &&
@@ -806,10 +775,6 @@ void readButtons() {
   pauseButton.read();
   upButton.read();
   downButton.read();
-#ifdef FIVEBUTTONS
-  buttonFour.read();
-  buttonFive.read();
-#endif
 }
 
 void volumeUpButton() {
@@ -970,13 +935,8 @@ void loop() {
     // analog volume adjustor 
     int sensorValue = analogRead(digitalVolumePin);
     float voltage = sensorValue * (5.0) / (1023.0);
-    float analogVolume = sensorValue * (maxVolumeAnalog - minVolumeAnalog) / (1023.0) + minVolumeAnalog;
-    
-    Serial.print("ADC reading: ");
-    Serial.print(sensorValue);
-    Serial.print(" Analog voltage: ");
-    Serial.print(voltage);
-    Serial.print(" Tuniono volume: ");
+    float analogVolume = sensorValue * (mySettings.maxVolume - mySettings.minVolume) / (1023.0) + mySettings.minVolume;
+    Serial.print("Volume: ");
     Serial.println(analogVolume);
     mp3.setVolume(analogVolume);
     delay(1);
@@ -1032,85 +992,22 @@ void loop() {
     }
 
     if (upButton.pressedFor(LONG_PRESS)) {
-#ifndef FIVEBUTTONS
-      if (isPlaying()) {
-        if (!mySettings.invertVolumeButtons) {
-          volumeUpButton();
-        }
-        else {
-          nextButton();
-        }
-      }
-      else {
-        playShortCut(1);
-      }
+      // TODO(rfink): Implement 10s forward skip
       ignoreUpButton = true;
-#endif
     } else if (upButton.wasReleased()) {
-      if (!ignoreUpButton)
-        if (!mySettings.invertVolumeButtons) {
-          nextButton();
-        }
-        else {
-          volumeUpButton();
-        }
+      nextButton();
       ignoreUpButton = false;
     }
 
     if (downButton.pressedFor(LONG_PRESS)) {
-#ifndef FIVEBUTTONS
-      if (isPlaying()) {
-        if (!mySettings.invertVolumeButtons) {
-          volumeDownButton();
-        }
-        else {
-          previousButton();
-        }
-      }
-      else {
-        playShortCut(2);
-      }
+      // TODO(rfink): Implement 10s backward skip
       ignoreDownButton = true;
-#endif
     } else if (downButton.wasReleased()) {
       if (!ignoreDownButton) {
-        if (!mySettings.invertVolumeButtons) {
-          previousButton();
-        }
-        else {
-          volumeDownButton();
-        }
+        previousButton();
       }
       ignoreDownButton = false;
     }
-#ifdef FIVEBUTTONS
-    if (buttonFour.wasReleased()) {
-      if (isPlaying()) {
-        if (!mySettings.invertVolumeButtons) {
-          volumeUpButton();
-        }
-        else {
-          nextButton();
-        }
-      }
-      else {
-        playShortCut(1);
-      }
-    }
-    if (buttonFive.wasReleased()) {
-      if (isPlaying()) {
-        if (!mySettings.invertVolumeButtons) {
-          volumeDownButton();
-        }
-        else {
-          previousButton();
-        }
-      }
-      else {
-        playShortCut(2);
-      }
-    }
-#endif
     // Ende der Buttons
   } while (!mfrc522.PICC_IsNewCardPresent());
 
@@ -1308,14 +1205,7 @@ void adminMenu(bool fromCard = false) {
     }
   }
   else if (subMenu == 10) {
-    // Invert Functions for Up/Down Buttons
-    int temp = voiceMenu(2, 933, 933, false);
-    if (temp == 2) {
-      mySettings.invertVolumeButtons = true;
-    }
-    else {
-      mySettings.invertVolumeButtons = false;
-    }
+    // Invert Functions for Up/Down Buttons: no longer used
   }
   else if (subMenu == 11) {
     Serial.println("Reset -> EEPROM wird gelöscht");
