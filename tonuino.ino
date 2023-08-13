@@ -636,13 +636,24 @@ MFRC522::StatusCode status;
 #define shutdownPin 27
 #define openAnalogPin A7
 
-#define digitalVolumePin A12
+
+
+#define dialPin1 34  // PF0
+#define dialPin2 35  // PF1
+#define dialPin3 36  // PF2
+#define dialPin4 37  // PF3
+#define digitalVolumePin 38  // PF4
 
 #define LONG_PRESS 1000
 
 Button pauseButton(buttonPause);
 Button upButton(buttonUp);
 Button downButton(buttonDown);
+Button dialButton1(dialPin1);
+Button dialButton2(dialPin2);
+Button dialButton3(dialPin3);
+Button dialButton4(dialPin4);
+
 bool ignorePauseButton = false;
 bool ignoreUpButton = false;
 bool ignoreDownButton = false;
@@ -707,6 +718,10 @@ void setup() {
   pauseButton.begin();
   upButton.begin();
   downButton.begin();
+  dialButton1.begin();
+  dialButton2.begin();
+  dialButton3.begin();
+  dialButton4.begin();
 
   // Wert für randomSeed() erzeugen durch das mehrfache Sammeln von rauschenden LSBs eines offenen Analogeingangs
   uint32_t ADC_LSB;
@@ -775,6 +790,10 @@ void readButtons() {
   pauseButton.read();
   upButton.read();
   downButton.read();
+  dialButton1.read();
+  dialButton2.read();
+  dialButton3.read();
+  dialButton4.read();
 }
 
 void volumeUpButton() {
@@ -940,6 +959,20 @@ void loop() {
     Serial.println(analogVolume);
     mp3.setVolume(analogVolume);
     delay(1);
+
+    if (dialButton1.isPressed()) {
+      Serial.println("test button1 selected");
+    }
+    if (dialButton2.isPressed()) {
+      Serial.println("test button2 selected");
+    }
+    if (dialButton3.isPressed()) {
+      Serial.println("test button3 selected");
+    }
+    if (dialButton4.isPressed()) {
+      Serial.println("test button4 selected");
+    }
+
 
     // admin menu
     if ((pauseButton.pressedFor(LONG_PRESS) || upButton.pressedFor(LONG_PRESS) || downButton.pressedFor(LONG_PRESS)) && pauseButton.isPressed() && upButton.isPressed() && downButton.isPressed()) {
