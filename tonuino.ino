@@ -23,6 +23,7 @@ uint16_t currentTrack;
 uint16_t firstTrack;
 uint8_t queue[255];
 uint8_t volume;
+uint16_t volumeSensorValue;
 
 struct folderSettings {
   uint8_t folder;
@@ -145,9 +146,9 @@ void resetSettings() {
   Serial.println("=== resetSettings()");
   mySettings.cookie = cardCookie;
   mySettings.version = 2;
-  mySettings.maxVolume = 25;
-  mySettings.minVolume = 11;
-  mySettings.initVolume = 15;
+  mySettings.maxVolume = 15;
+  mySettings.minVolume = 1;
+  mySettings.initVolume = 1;
   mySettings.eq = 1;
   mySettings.locked = false;
   mySettings.standbyTimer = 0;
@@ -629,14 +630,12 @@ byte blockAddr = 4;
 byte trailerBlock = 7;
 MFRC522::StatusCode status;
 
-#define buttonPause A0
+#define buttonPause A3 // was A0
 #define buttonUp A2
 #define buttonDown A1
 #define busyPin 13
 #define shutdownPin 27
 #define openAnalogPin A7
-
-
 
 #define dialPin1 34  // PF0
 #define dialPin2 35  // PF1
@@ -657,6 +656,7 @@ Button dialButton4(dialPin4);
 bool ignorePauseButton = false;
 bool ignoreUpButton = false;
 bool ignoreDownButton = false;
+
 
 /// Funktionen für den Standby Timer (z.B. über Pololu-Switch oder Mosfet)
 
@@ -755,6 +755,7 @@ void setup() {
   // Zwei Sekunden warten bis der DFPlayer Mini initialisiert ist
   delay(2000);
   volume = mySettings.initVolume;
+  volumeSensorValue = 0;
   mp3.setVolume(volume);
   mp3.setEq(mySettings.eq - 1);
   // Fix für das Problem mit dem Timeout (ist jetzt in Upstream daher nicht mehr nötig!)
@@ -773,8 +774,7 @@ void setup() {
   pinMode(buttonDown, INPUT_PULLUP);
 
   // RESET --- ALLE DREI KNÖPFE BEIM STARTEN GEDRÜCKT HALTEN -> alle EINSTELLUNGEN werden gelöscht
-  if (digitalRead(buttonPause) == LOW && digitalRead(buttonUp) == LOW &&
-      digitalRead(buttonDown) == LOW) {
+  if (digitalRead(buttonPause) == LOW && digitalRead(buttonUp) == LOW && digitalRead(buttonDown) == LOW) {
     Serial.println("Reset -> EEPROM wird gelöscht");
     for (int i = 0; i < 256; i++) {
       EEPROM.update(i, 0);
@@ -937,13 +937,10 @@ void playShortCut(uint8_t shortCut) {
     Serial.println("Shortcut not configured!");
 }
 
-float readVolume() {
+uint8_t readVolume() {
     int sensorValue = analogRead(digitalVolumePin);
-    float voltage = sensorValue * (5.0) / (1023.0);
-    float volume = sensorValue * (mySettings.maxVolume - mySettings.minVolume) / (1023.0) + mySettings.minVolume;
-    Serial.print("Volume: ");
-    Serial.println(volume);
-    return volume;
+    uint8_t new_volume = sensorValue * (mySettings.maxVolume - mySettings.minVolume) / (1023.0) + mySettings.minVolume;
+    return new_volume;
 }
 
 void loop() {
@@ -961,7 +958,14 @@ void loop() {
     readButtons();
 
     // Read volume from potentiometer
-    mp3.setVolume(readVolume());
+    // Note that the analog reading fluctuates quite a lotm hence the hysteresis.
+    uint8_t new_volume = readVolume();
+    if (abs(new_volume-volume) > 1) {
+      Serial.print("Setting new volume: ");
+      Serial.println(new_volume);
+      volume = new_volume;
+      mp3.setVolume(volume);
+    }
 
     if (dialButton1.isPressed()) {
       Serial.println("test button1 selected");
@@ -974,6 +978,18 @@ void loop() {
     }
     if (dialButton4.isPressed()) {
       Serial.println("test button4 selected");
+    }
+
+    if (upButton.isPressed()) {
+      Serial.println("upButton pressed");
+    }
+
+    if (downButton.isPressed()) {
+      Serial.println("downButton pressed");
+    }
+
+    if (pauseButton.isPressed()) {
+      Serial.println("pauseButton pressed");
     }
 
     // admin menu
